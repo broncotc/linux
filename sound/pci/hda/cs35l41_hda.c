@@ -24,7 +24,7 @@ static const struct reg_sequence cs35l41_hda_config[] = {
 	{ CS35L41_SP_FORMAT,		0x20200200 }, // 24 bits, I2S, BCLK Slave, FSYNC Slave
 	{ CS35L41_DAC_PCM1_SRC,		0x00000008 }, // DACPCM1_SRC = ASPRX1
 	{ CS35L41_AMP_DIG_VOL_CTRL,	0x00000000 }, // AMP_VOL_PCM  0.0 dB
-	{ CS35L41_AMP_GAIN_CTRL,	0x00000084 }, // AMP_GAIN_PCM 4.5 dB
+	{ CS35L41_AMP_GAIN_CTRL,	0x00000224 }, // AMP_GAIN_PCM 17.5 dB w/ ZC on
 	{ CS35L41_PWR_CTRL2,		0x00000001 }, // AMP_EN = 1
 };
 
@@ -383,7 +383,7 @@ no_acpi_dsd:
 	 * And devm functions expect that the device requesting the resource has the correct
 	 * fwnode.
 	 */
-	if (strncmp(hid, "CLSA0100", 8) != 0)
+	if (strncmp(hid, "CLSA0100", 8) != 0 && strncmp(hid, "CLSA0102", 8) != 0)
 		return ERR_PTR(-EINVAL);
 
 	/* check I2C address to assign the index */
