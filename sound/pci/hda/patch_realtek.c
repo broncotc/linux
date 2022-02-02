@@ -6593,8 +6593,10 @@ static void cs35l41_generic_fixup(struct hda_codec *cdc, int action, const char 
 		for (i = 0; i < count; i++) {
 			name = devm_kasprintf(dev, GFP_KERNEL,
 					      "%s-%s:00-cs35l41-hda.%d", bus, hid, i);
-			if (!name)
+			if (!name){
+				codec_err(cdc,"devm_kasprintf() failed, i=%d\n",i);
 				return;
+			}
 			component_match_add(dev, &spec->match, comp_match_dev_name, name);
 		}
 		ret = component_master_add_with_match(dev, &comp_master_ops, spec->match);
@@ -6608,7 +6610,7 @@ static void cs35l41_generic_fixup(struct hda_codec *cdc, int action, const char 
 
 static void cs35l41_fixup_i2c_two(struct hda_codec *cdc, const struct hda_fixup *fix, int action)
 {
-	cs35l41_generic_fixup(cdc, action, "i2c", "CSC3551", 2);
+	cs35l41_generic_fixup(cdc, action, "i2c", "CLSA0102", 2);
 }
 
 static void alc287_legion_16achg6_playback_hook(struct hda_pcm_stream *hinfo, struct hda_codec *cdc,
@@ -6621,12 +6623,12 @@ static void alc287_legion_16achg6_playback_hook(struct hda_pcm_stream *hinfo, st
 	switch (action) {
 	case HDA_GEN_PCM_ACT_PREPARE:
 		rx_slot = 0;
-		i = find_comp_by_dev_name(spec, "i2c-CLSA0100:00-cs35l41-hda.0");
+		i = find_comp_by_dev_name(spec, "i2c-CLSA0102:00-cs35l41-hda.0");
 		if (i >= 0)
 			spec->comps[i].set_channel_map(spec->comps[i].dev, 0, NULL, 1, &rx_slot);
 
 		rx_slot = 1;
-		i = find_comp_by_dev_name(spec, "i2c-CLSA0100:00-cs35l41-hda.1");
+		i = find_comp_by_dev_name(spec, "i2c-CLSA0102:00-cs35l41-hda.1");
 		if (i >= 0)
 			spec->comps[i].set_channel_map(spec->comps[i].dev, 0, NULL, 1, &rx_slot);
 		break;
@@ -6645,9 +6647,9 @@ static void alc287_fixup_legion_16achg6_speakers(struct hda_codec *cdc, const st
 	switch (action) {
 	case HDA_FIXUP_ACT_PRE_PROBE:
 		component_match_add(dev, &spec->match, comp_match_dev_name,
-				    "i2c-CLSA0100:00-cs35l41-hda.0");
+				    "i2c-CLSA0102:00-cs35l41-hda.0");
 		component_match_add(dev, &spec->match, comp_match_dev_name,
-				    "i2c-CLSA0100:00-cs35l41-hda.1");
+				    "i2c-CLSA0102:00-cs35l41-hda.1");
 		ret = component_master_add_with_match(dev, &comp_master_ops, spec->match);
 		if (ret)
 			codec_err(cdc, "Fail to register component aggregator %d\n", ret);
@@ -8694,6 +8696,8 @@ static const struct hda_fixup alc269_fixups[] = {
 	[ALC287_FIXUP_LEGION_16ACHG6] = {
 		.type = HDA_FIXUP_FUNC,
 		.v.func = alc287_fixup_legion_16achg6_speakers,
+		.chained = true,
+		.chain_id = ALC287_FIXUP_IDEAPAD_BASS_SPK_AMP,
 	},
 	[ALC287_FIXUP_CS35L41_I2C_2] = {
 		.type = HDA_FIXUP_FUNC,
@@ -9132,6 +9136,7 @@ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
 	SND_PCI_QUIRK(0x17aa, 0x384a, "Lenovo Yoga 7 15ITL5", ALC287_FIXUP_YOGA7_14ITL_SPEAKERS),
 	SND_PCI_QUIRK(0x17aa, 0x3852, "Lenovo Yoga 7 14ITL5", ALC287_FIXUP_YOGA7_14ITL_SPEAKERS),
 	SND_PCI_QUIRK(0x17aa, 0x3853, "Lenovo Yoga 7 15ITL5", ALC287_FIXUP_YOGA7_14ITL_SPEAKERS),
+	SND_PCI_QUIRK(0x17aa, 0x3856, "Ideapad Slim 7 Carbon", ALC287_FIXUP_CS35L41_I2C_2),
 	SND_PCI_QUIRK(0x17aa, 0x3902, "Lenovo E50-80", ALC269_FIXUP_DMIC_THINKPAD_ACPI),
 	SND_PCI_QUIRK(0x17aa, 0x3977, "IdeaPad S210", ALC283_FIXUP_INT_MIC),
 	SND_PCI_QUIRK(0x17aa, 0x3978, "Lenovo B50-70", ALC269_FIXUP_DMIC_THINKPAD_ACPI),

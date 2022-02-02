@@ -947,7 +947,7 @@ static int cs_dsp_create_control(struct cs_dsp *dsp,
 		}
 	}
 
-	ctl = kzalloc(sizeof(*ctl), GFP_KERNEL);
+	ctl = kzalloc(sizeof(struct cs_dsp_coeff_ctl), GFP_KERNEL);
 	if (!ctl)
 		return -ENOMEM;
 

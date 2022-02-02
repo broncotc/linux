@@ -633,7 +633,7 @@ static int wm_adsp_control_add(struct cs_dsp_coeff_ctl *cs_ctl)
 			 " %.*s", cs_ctl->subname_len - skip, cs_ctl->subname + skip);
 	}
 
-	ctl = kzalloc(sizeof(*ctl), GFP_KERNEL);
+	ctl = kzalloc(sizeof(struct wm_coeff_ctl), GFP_KERNEL);
 	if (!ctl)
 		return -ENOMEM;
 	ctl->cs_ctl = cs_ctl;
@@ -748,6 +748,7 @@ static int wm_adsp_request_firmware_file(struct wm_adsp *dsp,
 					 char **filename,
 					 char *suffix)
 {
+	adsp_info(dsp,"wm_adsp_request_firmware_file()\n");
 	struct cs_dsp *cs_dsp = &dsp->cs_dsp;
 	int ret = 0;
 
@@ -926,6 +927,8 @@ static void wm_adsp_boot_work(struct work_struct *work)
 	struct wm_adsp *dsp = container_of(work,
 					   struct wm_adsp,
 					   boot_work);
+	adsp_info(dsp,"wm_adsp_boot_work()");
+
 	int ret = 0;
 	char *wmfw_filename = NULL;
 	const struct firmware *wmfw_firmware = NULL;
@@ -936,7 +939,6 @@ static void wm_adsp_boot_work(struct work_struct *work)
 					     &wmfw_firmware, &wmfw_filename,
 					     &coeff_firmware, &coeff_filename);
 	if (ret){
-		adsp_err(dsp,)
 		return;
 	}
 
@@ -948,6 +950,8 @@ static void wm_adsp_boot_work(struct work_struct *work)
 	wm_adsp_release_firmware_files(dsp,
 				       wmfw_firmware, wmfw_filename,
 				       coeff_firmware, coeff_filename);
+
+	
 }
 
 int wm_adsp_early_event(struct snd_soc_dapm_widget *w,
@@ -1058,18 +1062,57 @@ EXPORT_SYMBOL_GPL(wm_adsp2_init);
 
 int wm_halo_init(struct wm_adsp *dsp)
 {
+	adsp_info(dsp,"wm_halo_init()");
 	int ret;
-
-	INIT_WORK(&dsp->boot_work, wm_adsp_boot_work);
+	
+	// INIT_WORK(&dsp->boot_work, wm_adsp_boot_work);
 
 	dsp->sys_config_size = sizeof(struct wm_halo_system_config_xm_hdr);
 	dsp->cs_dsp.client_ops = &wm_adsp2_client_ops;
 
 	ret = cs_dsp_halo_init(&dsp->cs_dsp);
-	if (ret)
+	if (ret){
+		adsp_err(dsp, "cs_dsp_halo_init() error: %d\n", ret);
 		return ret;
+	}
 
-	return wm_adsp_common_init(dsp);
+	ret =  wm_adsp_common_init(dsp);
+	if (ret){
+		adsp_err(dsp, "wm_adsp_common_init() error: %d\n", ret);
+		return ret;
+	}
+
+	char *wmfw_filename = NULL;
+	const struct firmware *wmfw_firmware = NULL;
+	char *coeff_filename = NULL;
+	const struct firmware *coeff_firmware = NULL;
+
+	ret = wm_adsp_request_firmware_files(dsp,
+					     &wmfw_firmware, &wmfw_filename,
+					     &coeff_firmware, &coeff_filename);
+	if (ret){
+		adsp_err(dsp,"firmware request failed: %d\n", ret);
+		return ret;
+	}
+
+	cs_dsp_power_up(&dsp->cs_dsp,
+			wmfw_firmware, wmfw_filename,
+			coeff_firmware, coeff_filename,
+			wm_adsp_fw_text[dsp->fw]);
+
+	wm_adsp_release_firmware_files(dsp,
+				       wmfw_firmware, wmfw_filename,
+				       coeff_firmware, coeff_filename);
+
+
+	ret = cs_dsp_run(&dsp->cs_dsp);
+	if (ret){
+		adsp_err(dsp, "cs_dsp_run() error: %d\n", ret);
+		return ret;
+	}
+
+	return ret;
+
 }
 EXPORT_SYMBOL_GPL(wm_halo_init);
 

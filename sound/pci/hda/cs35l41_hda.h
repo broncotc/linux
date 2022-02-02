@@ -15,6 +15,9 @@
 #include <linux/device.h>
 #include <sound/cs35l41.h>
 
+#include "wm_adsp.h"
+
+
 enum cs35l41_hda_spk_pos {
 	CS35l41_LEFT,
 	CS35l41_RIGHT,
@@ -50,6 +53,7 @@ struct cs35l41_hda_hw_config {
 };
 
 struct cs35l41_hda {
+	struct wm_adsp dsp; /* needs to be first member */
 	struct device *dev;
 	struct regmap *regmap;
 	struct gpio_desc *reset_gpio;

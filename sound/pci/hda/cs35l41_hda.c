@@ -383,7 +383,7 @@ no_acpi_dsd:
 	 * And devm functions expect that the device requesting the resource has the correct
 	 * fwnode.
 	 */
-	if (strncmp(hid, "CLSA0100", 8) != 0)
+	if (strncmp(hid, "CLSA0100", 8) != 0 && strncmp(hid, "CLSA0102", 8) != 0)
 		return ERR_PTR(-EINVAL);
 
 	/* check I2C address to assign the index */
@@ -394,6 +394,100 @@ no_acpi_dsd:
 
 	return NULL;
 }
+
+static const struct reg_sequence cs35l41_fs_errata_patch[] = {
+	{ CS35L41_DSP1_RX1_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX2_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX3_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX4_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX5_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX6_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX7_RATE,	0x00000001 },
+	{ CS35L41_DSP1_RX8_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX1_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX2_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX3_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX4_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX5_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX6_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX7_RATE,	0x00000001 },
+	{ CS35L41_DSP1_TX8_RATE,	0x00000001 },
+};
+
+static const struct cs_dsp_region cs35l41_dsp1_regions[] = {
+	{ .type = WMFW_HALO_PM_PACKED,	.base = CS35L41_DSP1_PMEM_0 },
+	{ .type = WMFW_HALO_XM_PACKED,	.base = CS35L41_DSP1_XMEM_PACK_0 },
+	{ .type = WMFW_HALO_YM_PACKED,	.base = CS35L41_DSP1_YMEM_PACK_0 },
+	{. type = WMFW_ADSP2_XM,	.base = CS35L41_DSP1_XMEM_UNPACK24_0},
+	{. type = WMFW_ADSP2_YM,	.base = CS35L41_DSP1_YMEM_UNPACK24_0},
+};
+
+static int cs35l41_dsp_init(struct cs35l41_hda *cs35l41)
+{
+	struct wm_adsp *dsp;
+	int ret;
+
+	dsp = &cs35l41->dsp;
+	dsp->part = "cs35l41";
+	dsp->cs_dsp.num = 1;
+	dsp->cs_dsp.type = WMFW_HALO;
+	dsp->cs_dsp.rev = 0;
+	dsp->fw = 9; /* 9 is WM_ADSP_FW_SPK_PROT in wm_adsp.c */
+	dsp->toggle_preload = true;
+	dsp->cs_dsp.dev = cs35l41->dev;
+	dsp->cs_dsp.regmap = cs35l41->regmap;
+	dsp->cs_dsp.base = CS35L41_DSP1_CTRL_BASE;
+	dsp->cs_dsp.base_sysinfo = CS35L41_DSP1_SYS_ID;
+	dsp->cs_dsp.mem = cs35l41_dsp1_regions;
+	dsp->cs_dsp.num_mems = ARRAY_SIZE(cs35l41_dsp1_regions);
+	dsp->cs_dsp.lock_regions = 0xFFFFFFFF;
+
+	ret = regmap_multi_reg_write(cs35l41->regmap, cs35l41_fs_errata_patch,
+				     ARRAY_SIZE(cs35l41_fs_errata_patch));
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "Failed to write fs errata: %d\n", ret);
+		return ret;
+	}
+
+	ret = wm_halo_init(dsp);
+	if (ret) {
+		dev_err(cs35l41->dev, "wm_halo_init failed: %d\n", ret);
+		return ret;
+	}
+
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX5_SRC,
+			   CS35L41_INPUT_SRC_VPMON);
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "Write INPUT_SRC_VPMON failed: %d\n", ret);
+		goto err_dsp;
+	}
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX6_SRC,
+			   CS35L41_INPUT_SRC_CLASSH);
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "Write INPUT_SRC_CLASSH failed: %d\n", ret);
+		goto err_dsp;
+	}
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX7_SRC,
+			   CS35L41_INPUT_SRC_TEMPMON);
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "Write INPUT_SRC_TEMPMON failed: %d\n", ret);
+		goto err_dsp;
+	}
+	ret = regmap_write(cs35l41->regmap, CS35L41_DSP1_RX8_SRC,
+			   CS35L41_INPUT_SRC_RSVD);
+	if (ret < 0) {
+		dev_err(cs35l41->dev, "Write INPUT_SRC_RSVD failed: %d\n", ret);
+		goto err_dsp;
+	}
+
+	return 0;
+
+err_dsp:
+	wm_adsp2_remove(dsp);
+
+	return ret;
+}
+
 
 int cs35l41_hda_probe(struct device *dev, const char *device_name, int id, int irq,
 		      struct regmap *regmap)
@@ -504,16 +598,25 @@ int cs35l41_hda_probe(struct device *dev, const char *device_name, int id, int i
 			goto err;
 		}
 	}
+	dev_info(cs35l41->dev, "Init DSP!!!");
+	ret = cs35l41_dsp_init(cs35l41);
+	if(ret < 0){
+		dev_err(cs35l41->dev, "dsp init failed: %d\n", ret);
+		goto err;
+	}
 
 	ret = component_add(cs35l41->dev, &cs35l41_hda_comp_ops);
 	if (ret) {
 		dev_err(cs35l41->dev, "Register component failed: %d\n", ret);
-		goto err;
+		goto err_after_dsp;
 	}
 
 	dev_info(cs35l41->dev, "Cirrus Logic CS35L41 (%x), Revision: %02X\n", regid, reg_revid);
 
 	return 0;
+
+err_after_dsp:
+	wm_adsp2_remove(&cs35l41->dsp);
 
 err:
 	kfree(acpi_hw_cfg);
@@ -529,6 +632,7 @@ void cs35l41_hda_remove(struct device *dev)
 {
 	struct cs35l41_hda *cs35l41 = dev_get_drvdata(dev);
 
+	wm_adsp2_remove(&cs35l41->dsp);
 	component_del(cs35l41->dev, &cs35l41_hda_comp_ops);
 
 	if (!cs35l41->vspk_always_on)
